@@ -10,7 +10,7 @@
   programs.git = {
     enable = true;
     signing = {
-      key = "E5FE60726B0803D5D1890F18960E9B89020CDD5D";
+      key = "63CB76469C67C48A2A672A69AF324C0CB234D7F7";
       signByDefault = true;
     };
     lfs.enable = true;
