@@ -72,27 +72,47 @@
   };
 
   home.packages = with pkgs; [
+    # --- 开发有关 ---
+    rustc
+    cargo
+    rustfmt
+    clippy
+    rust-analyzer
+
+    darklua
+
     nodejs_24
     typescript
     prettier
     eslint
     typescript-language-server
+
+    nixd
+    nixfmt
+
+    go
+    gopls
+    air
+
+    # --- 开发工具 ---
+    just
+    git-lfs
+    nvimpager
+    neovim
+    tea
+
+    packwiz
+
+    aoc-cli
+
+    # --- 其他工具 ---
+    pandoc
     ripgrep
     fd
     btop
-    nixd
-    nixfmt
-    tea
     fzf
-    git-lfs
     yazi
-    go
-    air
-    gopls
-    packwiz
-    pandoc
     starship
-    nvimpager
-    neovim
+    imagemagick
   ];
 }
