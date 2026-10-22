@@ -87,7 +87,6 @@
     git-lfs
     yazi
     go
-    yatto
     air
     gopls
     packwiz
