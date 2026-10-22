@@ -1,0 +1,20 @@
+# --- Nix build outputs ---
+# `home-manager switch` / `nix build` 生成的 result 符号链接，指向本地 store 路径，无提交价值
+/result
+/result-*
+
+# --- Nix / direnv dev shells ---
+/.direnv/
+/.envrc.local
+
+# --- Nix 本地状态 / profile ---
+/.nix-profile
+/.local/
+
+# --- 编辑器与系统垃圾 ---
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.DS_Store
