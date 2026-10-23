@@ -86,12 +86,27 @@
     # formatter / lsp
     prettier
     eslint
+    eslint_d
     typescript-language-server
+    astro-language-server
+    svelte-language-server
+    vue-language-server
+    tailwindcss-language-server
+    wgsl-analyzer
+    yaml-language-server
+    systemd-lsp
+    taplo
+    lua-language-server
+    neocmakelsp
     nixd
     nixfmt
     gopls
     ruff
     basedpyright
+    just-lsp
+    tinymist
+    dockerfile-language-server
+    docker-compose-language-service
 
     # --- 开发工具 ---
     just
