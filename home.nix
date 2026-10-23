@@ -81,6 +81,7 @@
     rust-analyzer
     rustfmt
     clippy
+    clang-tools
 
     # formatter / lsp
     prettier
@@ -98,6 +99,11 @@
     nvimpager
     neovim
     tea
+    lldb
+    lld
+    cmake
+    ninja
+    pkg-config
 
     air
 
