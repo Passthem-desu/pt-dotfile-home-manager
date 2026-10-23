@@ -1,5 +1,4 @@
 { pkgs, config, ... }:
-
 {
   home.username = "passthem";
   home.homeDirectory = "/home/passthem";
@@ -72,27 +71,26 @@
   };
 
   home.packages = with pkgs; [
-    # --- 开发有关 ---
-    rustc
-    cargo
-    rustfmt
-    clippy
-    rust-analyzer
-
+    # --- 构建 / 运行时 ---
     darklua
-
     nodejs_24
     typescript
+    go
+    cargo
+    rustc
+    rust-analyzer
+    rustfmt
+    clippy
+
+    # formatter / lsp
     prettier
     eslint
     typescript-language-server
-
     nixd
     nixfmt
-
-    go
     gopls
-    air
+    ruff
+    basedpyright
 
     # --- 开发工具 ---
     just
@@ -100,6 +98,8 @@
     nvimpager
     neovim
     tea
+
+    air
 
     packwiz
 
