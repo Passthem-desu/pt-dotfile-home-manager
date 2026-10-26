@@ -2,10 +2,10 @@
 {
   home.username = "passthem";
   home.homeDirectory = "/home/passthem";
-
   home.stateVersion = "26.05";
-
   programs.home-manager.enable = true;
+  targets.genericLinux.enable = true;
+
   programs.git = {
     enable = true;
     signing = {
