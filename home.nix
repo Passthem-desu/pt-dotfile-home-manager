@@ -75,13 +75,14 @@
     darklua
     nodejs_24
     typescript
-    go
+    go_latest
     cargo
     rustc
     rust-analyzer
     rustfmt
     clippy
     clang-tools
+    zig
 
     # formatter / lsp
     prettier
@@ -107,6 +108,7 @@
     tinymist
     dockerfile-language-server
     docker-compose-language-service
+    zls
 
     # --- 开发工具 ---
     just
