@@ -464,7 +464,7 @@ theme "onedark"
 // Default: "127.0.0.1"
 // (Requires restart)
 //
-web_server_ip "0.0.0.0"
+// web_server_ip "0.0.0.0"
 
 
 // A path to a certificate file to be used when setting up the web client to serve the
