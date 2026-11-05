@@ -20,8 +20,8 @@
       push.autoSetupRemote = true;
       pull.rebase = false;
       core.editor = "nvim";
-      merge.tool = "nvimdiff";
-      mergetool.keepBackup = false;
+      # merge.tool = "nvimdiff";
+      # mergetool.keepBackup = false;
       merge.conflictStyle = "zdiff3";
     };
   };
