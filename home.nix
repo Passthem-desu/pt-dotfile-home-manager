@@ -122,6 +122,7 @@
     cmake
     ninja
     pkg-config
+    sqlit-tui
 
     air
 
