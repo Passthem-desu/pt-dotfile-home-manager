@@ -123,6 +123,7 @@
     ninja
     pkg-config
     sqlit-tui
+    ansible
 
     air
 
