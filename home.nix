@@ -73,28 +73,19 @@
 
   home.packages = with pkgs; [
     # --- 构建 / 运行时 ---
-    darklua
     nodejs_24
     typescript
     go_latest
-    cargo
-    rustc
-    rust-analyzer
-    rustfmt
-    clippy
     clang-tools
-    zig
 
     # formatter / lsp
     prettier
     eslint
-    eslint_d
     typescript-language-server
     astro-language-server
     svelte-language-server
     vue-language-server
     tailwindcss-language-server
-    wgsl-analyzer
     yaml-language-server
     systemd-lsp
     taplo
@@ -109,7 +100,6 @@
     tinymist
     dockerfile-language-server
     docker-compose-language-service
-    zls
 
     # --- 开发工具 ---
     just
@@ -122,7 +112,6 @@
     cmake
     ninja
     pkg-config
-    sqlit-tui
     ansible
 
     air
