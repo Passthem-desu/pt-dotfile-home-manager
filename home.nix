@@ -148,5 +148,7 @@
     yazi
     starship
     imagemagick
+    chafa
+    timg
   ];
 }
