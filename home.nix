@@ -113,8 +113,10 @@
     ninja
     pkg-config
     ansible
+    devenv
 
     air
+    entr
 
     packwiz
 
