@@ -94,6 +94,7 @@
     typescript
     go_latest
     clang-tools
+    bun
 
     # formatter / lsp
     prettier
