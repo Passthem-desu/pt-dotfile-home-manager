@@ -126,6 +126,8 @@ in
         RuntimeDirectoryMode = "0700";
         KillMode = "control-group";
         TimeoutStopSec = 5;
+        # 桌面里的终端不再打 MOTD（zshrc 里 PT_PMOTD2_RUN 已设就跳过 pmotd2）。
+        Environment = [ "PT_PMOTD2_RUN=yes" ];
       };
     };
   };
