@@ -3,6 +3,7 @@
   imports = [ ./modules/vdesk ];
 
   vdesk.enable = true;
+  vdesk.xwayland = true;
 
   home.username = "passthem";
   home.homeDirectory = "/home/passthem";

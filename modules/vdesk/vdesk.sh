@@ -25,11 +25,12 @@ usage() {
   focus <name> <模式>       聚焦 app_id 或标题匹配的窗口
   exec <name> <命令...>     在桌面里跑一个程序
 
-  type <name> <文本>        打字
+  type <name> <文本>        打字（非 ASCII 自动改用剪贴板粘贴）
   key <name> <组合键>       如 Return / Tab / ctrl+c
   move <name> <x> <y>       移动指针
-  click <name> <x> <y> [左键]  移动并点击（按钮默认 left）
-  scroll <name> <x> <y>     滚动
+  click <name> <x> <y> [按钮]  移动并点击（left/middle/right）
+  drag <name> <x1> <y1> <x2> <y2> [步数]  按住拖动
+  scroll <name> <x> <y> [up|down|left|right] [次数]  滚动
 
   run <name>                systemd 入口，前台跑整块屏幕（不直接调用）
 EOF
@@ -217,45 +218,131 @@ cmd_exec() {
   swaymsg exec -- "$*" >/dev/null
 }
 
+# vncdotool 的 pause 参数单位是秒（直接喂 reactor.callLater）。
+# 新连接第一次发键前，wayvnc 才把它的 xkb keymap 传给合成器并同步给 Xwayland，
+# 不等这段时间的话第一个按键会被丢掉——所以发键前先停一下。
+VNC_SETTLE="${VDESK_VNC_SETTLE:-0.35}"
+
+# 输入注入只能走 wayvnc 的 RFB 口：wayvnc 自己持着常驻的虚拟指针/键盘。
+# wlrctl 那种一次性客户端每条命令新建一个设备，进程退出时设备销毁、合成器会清掉
+# pointer focus，button 直接丢；Xwayland 的 XTEST 又因为 nixpkgs 的 wlroots 没编
+# libei 而被丢弃（日志里的 "[xwayland ei] Setup failed"）；uinput 更不行——
+# headless 后端没有 libinput，内核输入设备进不了合成器。
+vnc_do() {
+  local name=$1 rt port
+  shift
+  rt=$(runtime_of "$name")
+  port=$(cat "$rt/wayvnc-port" 2>/dev/null) || port=""
+  [ -n "$port" ] || die "屏幕 $name 未运行（vdesk new $name）"
+  timeout "${VDESK_VNC_TIMEOUT:-20}" \
+    vncdo -s "127.0.0.1::$port" --delay 20 "$@" </dev/null ||
+    die "输入注入失败：$name"
+}
+
+button_num() {
+  case "$1" in
+  left | 1) printf 1 ;;
+  middle | 2) printf 2 ;;
+  right | 3) printf 3 ;;
+  *) die "未知按钮: $1（left/middle/right）" ;;
+  esac
+}
+
+# sway 风格的键名 → vncdo 的 keysym 记号（KEYMAP 只认小写单词或单字符）。
+key_token() {
+  local k=${1,,}
+  case "$k" in
+  return | enter) printf return ;;
+  escape | esc) printf esc ;;
+  tab) printf tab ;;
+  space) printf space ;;
+  backspace | bsp) printf bsp ;;
+  delete | del) printf delete ;;
+  home) printf home ;;
+  end) printf end ;;
+  pageup | pgup) printf pgup ;;
+  pagedown | pgdn) printf pgdn ;;
+  left | right | up | down) printf '%s' "$k" ;;
+  f[1-9] | f[12][0-9] | f2[0-4]) printf '%s' "$k" ;;
+  *) printf '%s' "$1" ;;
+  esac
+}
+
+mod_token() {
+  case "${1,,}" in
+  ctrl | control) printf ctrl ;;
+  alt | mod1) printf alt ;;
+  shift) printf shift ;;
+  super | mod4) printf super ;;
+  meta) printf meta ;;
+  *) die "未知修饰键: $1（ctrl/alt/shift/super）" ;;
+  esac
+}
+
+# RFB 的 keysym 只有 ASCII 能直接发；其它字符走剪贴板 + ctrl+v。
+# 不能用 vncdo 自带的 pastefile（ClientCutText）——wayvnc 会直接断掉连接；
+# 换成 wl-copy 设置 Wayland 剪贴板，Xwayland 自己会把选区桥接给 X11 应用。
 cmd_type() {
-  local name=${1:?缺少 name}
+  local name=${1:?缺少 name} text
   shift
   [ $# -gt 0 ] || die "type 需要文本"
-  screen_env "$name"
-  wtype -s 12 "$*"
+  text="$*"
+  if LC_ALL=C grep -q '[^ -~]' <<<"$text"; then
+    screen_env "$name"
+    wl-copy "$text"
+    vnc_do "$name" pause "$VNC_SETTLE" key ctrl-v
+  else
+    vnc_do "$name" pause "$VNC_SETTLE" type "$text"
+  fi
 }
 
 cmd_key() {
   local name=$1 combo=$2
-  local -a parts args=()
-  local i n
-  screen_env "$name"
+  local -a parts=() toks=()
+  local i n joined
   IFS='+' read -r -a parts <<<"$combo"
   n=${#parts[@]}
-  for ((i = 0; i < n - 1; i++)); do args+=(-M "${parts[i]}"); done
-  args+=(-k "${parts[n - 1]}")
-  for ((i = n - 2; i >= 0; i--)); do args+=(-m "${parts[i]}"); done
-  wtype "${args[@]}"
+  for ((i = 0; i < n - 1; i++)); do toks+=("$(mod_token "${parts[i]}")"); done
+  toks+=("$(key_token "${parts[n - 1]}")")
+  joined=$(IFS=-; printf '%s' "${toks[*]}")
+  vnc_do "$name" pause "$VNC_SETTLE" key "$joined"
 }
 
 cmd_move() {
-  local name=$1 x=$2 y=$3
-  screen_env "$name"
-  wlrctl pointer move "$x" "$y"
+  vnc_do "$1" move "$2" "$3"
 }
 
 cmd_click() {
-  local name=$1 x=$2 y=$3 button=${4:-left}
-  screen_env "$name"
-  wlrctl pointer move "$x" "$y"
-  sleep 0.15
-  wlrctl pointer click "$button"
+  vnc_do "$1" move "$2" "$3" click "$(button_num "${4:-left}")"
 }
 
+cmd_drag() {
+  local name=$1 x1=$2 y1=$3 x2=$4 y2=$5 steps=${6:-12}
+  local -a acts=(move "$x1" "$y1" mousedown 1)
+  local i x y
+  for ((i = 1; i <= steps; i++)); do
+    x=$((x1 + (x2 - x1) * i / steps))
+    y=$((y1 + (y2 - y1) * i / steps))
+    acts+=(move "$x" "$y")
+  done
+  acts+=(mouseup 1)
+  vnc_do "$name" "${acts[@]}"
+}
+
+# RFB 没有滚动事件，滚轮就是 button 4/5（横向 6/7）。
 cmd_scroll() {
-  local name=$1 x=$2 y=$3
-  screen_env "$name"
-  wlrctl pointer scroll "$x" "$y"
+  local name=$1 x=$2 y=$3 dir=${4:-down} n=${5:-1}
+  local -a acts=(move "$x" "$y")
+  local i btn
+  case "$dir" in
+  up) btn=4 ;;
+  down) btn=5 ;;
+  left) btn=6 ;;
+  right) btn=7 ;;
+  *) die "scroll 方向需要 up/down/left/right" ;;
+  esac
+  for ((i = 0; i < n; i++)); do acts+=(click "$btn"); done
+  vnc_do "$name" "${acts[@]}"
 }
 
 cmd_url() {
@@ -318,7 +405,8 @@ main() {
   key) cmd_key "${1:?缺少 name}" "${2:?缺少组合键}" ;;
   move) cmd_move "${1:?缺少 name}" "${2:?缺少 x}" "${3:?缺少 y}" ;;
   click) cmd_click "${1:?缺少 name}" "${2:?缺少 x}" "${3:?缺少 y}" "${4:-left}" ;;
-  scroll) cmd_scroll "${1:?缺少 name}" "${2:?缺少 x}" "${3:?缺少 y}" ;;
+  drag) cmd_drag "${1:?缺少 name}" "${2:?缺少 x1}" "${3:?缺少 y1}" "${4:?缺少 x2}" "${5:?缺少 y2}" "${6:-12}" ;;
+  scroll) cmd_scroll "${1:?缺少 name}" "${2:?缺少 x}" "${3:?缺少 y}" "${4:-down}" "${5:-1}" ;;
   run) cmd_run "${1:?缺少 name}" ;;
   -h | --help | help | "") usage ;;
   *) die "未知命令: $cmd（vdesk --help）" ;;

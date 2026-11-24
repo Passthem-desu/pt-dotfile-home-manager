@@ -44,14 +44,15 @@ let
     runtimeInputs = with pkgs; [
       sway
       grim
-      wtype
-      wlrctl
       wayvnc
       python3Packages.websockify
+      python3Packages.vncdotool
+      wl-clipboard
       novnc
       jq
       foot
-    ];
+    ]
+    ++ lib.optional cfg.xwayland xwayland;
     text = ''
       export VDESK_NOVNC_WEB="${pkgs.novnc}/share/webapps/novnc"
       export VDESK_SWAY_CONF="${swayConf}"
