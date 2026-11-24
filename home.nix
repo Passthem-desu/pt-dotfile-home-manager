@@ -1,5 +1,9 @@
 { pkgs, config, ... }:
 {
+  imports = [ ./modules/vdesk ];
+
+  vdesk.enable = true;
+
   home.username = "passthem";
   home.homeDirectory = "/home/passthem";
   home.stateVersion = "26.05";
