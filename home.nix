@@ -25,8 +25,6 @@
       push.autoSetupRemote = true;
       pull.rebase = false;
       core.editor = "nvim";
-      # merge.tool = "nvimdiff";
-      # mergetool.keepBackup = false;
       merge.conflictStyle = "zdiff3";
     };
   };
@@ -104,6 +102,8 @@
     # formatter / lsp
     prettier
     eslint
+    # vscode-eslint-language-server 等 vscode 系 LSP
+    vscode-langservers-extracted
     typescript-language-server
     astro-language-server
     svelte-language-server
@@ -156,5 +156,6 @@
     imagemagick
     chafa
     timg
+    python3Packages.vncdotool
   ];
 }

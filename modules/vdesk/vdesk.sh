@@ -100,6 +100,31 @@ free_port() {
   return 1
 }
 
+# free_port 只能回答『此刻没人监听』，而从探到 bind 之间还隔着 sway 启动那段窗口：
+# 两块屏同时起会挑中同一个端口。所以自己绑，再回头确认监听者就是这个子进程
+# （bind 失败时 wayvnc / websockify 会当场退出，端口文件要是照写就成了谎话）。
+port_owner() {
+  ss -Hltnp "sport = :$1" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1
+}
+
+wait_bind() {
+  local port=$1 pid=$2 i
+  for i in {1..60}; do
+    kill -0 "$pid" 2>/dev/null || return 1
+    [ "$(port_owner "$port")" = "$pid" ] && return 0
+    sleep 0.05
+  done
+  return 1
+}
+
+bind_or_kill() {
+  local port=$1 pid=$2
+  wait_bind "$port" "$pid" && return 0
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  return 1
+}
+
 output_size() {
   swaymsg -t get_outputs | jq -r --arg out "$OUTPUT" \
     '[.[] | select(.name == $out)][0] | "\(.rect.width) \(.rect.height)"'
@@ -223,6 +248,10 @@ cmd_exec() {
 # 不等这段时间的话第一个按键会被丢掉——所以发键前先停一下。
 VNC_SETTLE="${VDESK_VNC_SETTLE:-0.35}"
 
+# 指针位置同样不是同步上报的（wayvnc 按帧批量送）：move 紧跟按钮事件时，按下会被
+# 算在旧坐标上——click 落在上一次的位置，两点短笔画直接退化成原地一个点。
+VNC_POINTER_SETTLE="${VDESK_VNC_POINTER_SETTLE:-0.05}"
+
 # 输入注入只能走 wayvnc 的 RFB 口：wayvnc 自己持着常驻的虚拟指针/键盘。
 # wlrctl 那种一次性客户端每条命令新建一个设备，进程退出时设备销毁、合成器会清掉
 # pointer focus，button 直接丢；Xwayland 的 XTEST 又因为 nixpkgs 的 wlroots 没编
@@ -313,12 +342,12 @@ cmd_move() {
 }
 
 cmd_click() {
-  vnc_do "$1" move "$2" "$3" click "$(button_num "${4:-left}")"
+  vnc_do "$1" move "$2" "$3" pause "$VNC_POINTER_SETTLE" click "$(button_num "${4:-left}")"
 }
 
 cmd_drag() {
   local name=$1 x1=$2 y1=$3 x2=$4 y2=$5 steps=${6:-12}
-  local -a acts=(move "$x1" "$y1" mousedown 1)
+  local -a acts=(move "$x1" "$y1" pause "$VNC_POINTER_SETTLE" mousedown 1)
   local i x y
   for ((i = 1; i <= steps; i++)); do
     x=$((x1 + (x2 - x1) * i / steps))
@@ -332,7 +361,7 @@ cmd_drag() {
 # RFB 没有滚动事件，滚轮就是 button 4/5（横向 6/7）。
 cmd_scroll() {
   local name=$1 x=$2 y=$3 dir=${4:-down} n=${5:-1}
-  local -a acts=(move "$x" "$y")
+  local -a acts=(move "$x" "$y" pause "$VNC_POINTER_SETTLE")
   local i btn
   case "$dir" in
   up) btn=4 ;;
@@ -351,14 +380,12 @@ cmd_url() {
 
 # systemd 入口：前台跑 sway，wayvnc / websockify 作为子进程，退出时一起收掉。
 cmd_run() {
-  local name=$1 rt vnc_port web_port wd i sway_pid
+  local name=$1 rt vnc_port web_port wd i sway_pid vnc_pid web_pid p
   rt=$(runtime_of "$name")
   mkdir -p "$rt"
   chmod 700 "$rt"
-  vnc_port=$(free_port 5901 5999) || die "5901-5999 没有空闲端口"
-  web_port=$(free_port 6081 6199) || die "6081-6199 没有空闲端口"
-  printf '%s\n' "$vnc_port" >"$rt/wayvnc-port"
-  printf '%s\n' "$web_port" >"$rt/web-port"
+  # 端口文件是就绪标记而不是配置：先清掉上次运行剩下的，否则 cmd_new 会读到假地址。
+  rm -f "$rt/wayvnc-port" "$rt/web-port"
 
   export XDG_RUNTIME_DIR="$rt" XDG_SESSION_TYPE=wayland
   unset WAYLAND_DISPLAY
@@ -380,8 +407,34 @@ cmd_run() {
   printf '%s\n' "$wd" >"$rt/wayland-display"
   export WAYLAND_DISPLAY="$wd"
 
-  wayvnc -r -f 30 "127.0.0.1:$vnc_port" &
-  websockify --web "${VDESK_NOVNC_WEB:?}" "127.0.0.1:$web_port" "127.0.0.1:$vnc_port" &
+  # 先把 wayvnc 的端口绑死在自己手里，再挑 web 端口：这样 websockify 反代的目标
+  # 不可能被另一块屏复用走。重试拿的是下一个候选端口，绝不回收已确认的那个。
+  vnc_port=""
+  for _ in {1..5}; do
+    p=$(free_port 5901 5999) || break
+    wayvnc -r -f 30 "127.0.0.1:$p" &
+    vnc_pid=$!
+    if bind_or_kill "$p" "$vnc_pid"; then
+      vnc_port=$p
+      break
+    fi
+  done
+  [ -n "$vnc_port" ] || die "wayvnc 没绑上端口（5901-5999）"
+
+  web_port=""
+  for _ in {1..5}; do
+    p=$(free_port 6081 6199) || break
+    websockify --web "${VDESK_NOVNC_WEB:?}" "127.0.0.1:$p" "127.0.0.1:$vnc_port" &
+    web_pid=$!
+    if bind_or_kill "$p" "$web_pid"; then
+      web_port=$p
+      break
+    fi
+  done
+  [ -n "$web_port" ] || die "websockify 没绑上端口（6081-6199）"
+
+  printf '%s\n' "$vnc_port" >"$rt/wayvnc-port"
+  printf '%s\n' "$web_port" >"$rt/web-port"
 
   wait "$sway_pid"
 }

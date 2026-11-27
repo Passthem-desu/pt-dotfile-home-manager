@@ -50,6 +50,7 @@ let
       wl-clipboard
       novnc
       jq
+      iproute2
       foot
     ]
     ++ lib.optional cfg.xwayland xwayland;
